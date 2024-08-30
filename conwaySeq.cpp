@@ -98,12 +98,19 @@ public:
         };
 
         srand(time(nullptr));
+
+        auto start = std::chrono::high_resolution_clock::now(); // Iniciar medición de tiempo
+
         for (int i = 0; i < numObjects; ++i) {
             int patternIndex = rand() % patterns.size();
             int x = rand() % GRID_WIDTH;
             int y = rand() % GRID_HEIGHT;
             placePattern(x, y, patterns[patternIndex]);
         }
+
+        auto end = std::chrono::high_resolution_clock::now(); // Fin de medición de tiempo
+        std::chrono::duration<double> duration = end - start;
+        std::cout << "Tiempo para generar figuras: " << duration.count() << " segundos" << std::endl;
     }
 
     void randomizeGrid() {
