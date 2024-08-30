@@ -9,9 +9,11 @@
 
 const int SCREEN_WIDTH = 800;
 const int SCREEN_HEIGHT = 600;
-const int CELL_SIZE = 10;
+const int CELL_SIZE = 8;
 const int GRID_WIDTH = SCREEN_WIDTH / CELL_SIZE;
 const int GRID_HEIGHT = SCREEN_HEIGHT / CELL_SIZE;
+const int TARGET_FPS = 60;
+const int FRAME_DELAY = 1000 / TARGET_FPS;
 
 class Game {
 private:
@@ -78,27 +80,59 @@ public:
         }
     }
 
+    void placePattern(int x, int y, const std::vector<std::vector<int>>& pattern) {
+        for (int i = 0; i < pattern.size(); ++i) {
+            for (int j = 0; j < pattern[i].size(); ++j) {
+                if (pattern[i][j] == 1) {
+                    grid[(y + i) % GRID_HEIGHT][(x + j) % GRID_WIDTH] = true;
+                }
+            }
+        }
+    }
+
+    void generateFigures() {
+        std::vector<std::vector<std::vector<int>>> patterns = {
+            {{0, 1, 0}, {0, 0, 1}, {1, 1, 1}},  // Glider
+            {{1, 1}, {1, 1}},                  // Block
+            {{1, 1, 1}}                        // Blinker
+        };
+
+        srand(time(nullptr));
+        for (int i = 0; i < numObjects; ++i) {
+            int patternIndex = rand() % patterns.size();
+            int x = rand() % GRID_WIDTH;
+            int y = rand() % GRID_HEIGHT;
+            placePattern(x, y, patterns[patternIndex]);
+        }
+    }
+
     void randomizeGrid() {
         srand(time(nullptr));
         int objectsPlaced = 0;
-        int centerX = GRID_WIDTH / 2;
-        int centerY = GRID_HEIGHT / 2;
-        int range = std::min(GRID_WIDTH, GRID_HEIGHT) / 4; // Rango para dispersión cerca del centro
+        auto start = std::chrono::high_resolution_clock::now();
 
         while (objectsPlaced < numObjects) {
-            int x = centerX + (rand() % (2 * range)) - range; // Centrado alrededor del centro
-            int y = centerY + (rand() % (2 * range)) - range;
-            
-            // Asegura que x y y estén dentro de los límites
-            if (x >= 0 && x < GRID_WIDTH && y >= 0 && y < GRID_HEIGHT && !grid[y][x]) {
+            int x = rand() % GRID_WIDTH;
+            int y = rand() % GRID_HEIGHT;
+            if (!grid[y][x]) {
                 grid[y][x] = true;
                 objectsPlaced++;
             }
+
+            auto current = std::chrono::high_resolution_clock::now();
+            std::chrono::duration<double, std::milli> elapsed = current - start;
+
+            if (elapsed.count() > FRAME_DELAY) {
+                SDL_Delay(FRAME_DELAY - elapsed.count());
+                calculateFPS();
+                start = std::chrono::high_resolution_clock::now();
+            }
         }
 
-        std::cout << "Se acabo "<<std::endl;
+        auto end = std::chrono::high_resolution_clock::now();
+        std::chrono::duration<double> duration = end - start;
+        std::cout << "Tiempo para generar " << numObjects << " elementos: " << duration.count() << " segundos" << std::endl;
     }
-
 
     int countNeighbors(int x, int y) {
         int count = 0;
@@ -142,15 +176,14 @@ public:
     }
 
     void run() {
-        randomizeGrid();
-
-        // Medir tiempo de ejecución
-        auto start = std::chrono::high_resolution_clock::now();
+        generateFigures(); // Generar figuras predefinidas
 
         bool quit = false;
         SDL_Event e;
 
         while (!quit) {
+            auto frameStart = std::chrono::high_resolution_clock::now();
+
             while (SDL_PollEvent(&e) != 0) {
                 if (e.type == SDL_QUIT) {
                     quit = true;
@@ -160,12 +193,14 @@ public:
             update();
             render();
             calculateFPS();
-            SDL_Delay(16);
-        }
 
-        auto end = std::chrono::high_resolution_clock::now();
-        std::chrono::duration<double> duration = end - start;
-        std::cout << "Tiempo de ejecución secuencial: " << duration.count() << " segundos" << std::endl;
+            auto frameEnd = std::chrono::high_resolution_clock::now();
+            std::chrono::duration<double, std::milli> frameDuration = frameEnd - frameStart;
+            int delay = FRAME_DELAY - static_cast<int>(frameDuration.count());
+            if (delay > 0) {
+                SDL_Delay(delay);
+            }
+        }
     }
 
     void close() {
