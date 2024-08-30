@@ -1,0 +1,36 @@
+# Archivos de compilación
+*.o
+*.obj
+
+# Archivos de la base de datos de dependencias de Makefile
+*.d
+
+# Archivos generados por el compilador
+*.a
+*.so
+*.dll
+*.lib
+*.exe
+
+# Archivos de configuración de IDE
+*.idea/
+*.vscode/
+*.sublime-project
+*.sublime-workspace
+
+# Archivos temporales del sistema
+*.swp
+*.swo
+*.tmp
+*.log
+
+# Archivos generados por el compilador
+*.gch
+*.gcda
+*.gcno
+*.gcov
+*.c~ 
+
+# Archivos específicos de sistemas operativos
+.DS_Store
+Thumbs.db

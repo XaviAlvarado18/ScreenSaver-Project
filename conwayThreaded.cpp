@@ -1,0 +1,191 @@
+#include <SDL2/SDL.h>
+#include <SDL2/SDL_ttf.h>
+#include <vector>
+#include <cstdlib>
+#include <ctime>
+#include <iostream>
+#include <chrono>
+#include <string>
+#include <thread>  // Para std::thread
+#include <mutex>   // Para std::mutex
+
+const int SCREEN_WIDTH = 800;
+const int SCREEN_HEIGHT = 600;
+const int CELL_SIZE = 10;
+const int GRID_WIDTH = SCREEN_WIDTH / CELL_SIZE;
+const int GRID_HEIGHT = SCREEN_HEIGHT / CELL_SIZE;
+const int NUM_THREADS = 4;  // Número de hilos
+
+std::mutex mtx;  // Mutex para sincronización
+
+class Game {
+private:
+    SDL_Window* window;
+    SDL_Renderer* renderer;
+    SDL_Texture* texture;
+    std::vector<std::vector<bool>> grid;
+    std::vector<std::vector<bool>> nextGrid;
+    int frameCount;
+    std::chrono::time_point<std::chrono::high_resolution_clock> lastTime;
+    float fps;
+
+    void updateBlock(int startY, int endY) {
+        for (int y = startY; y < endY; ++y) {
+            for (int x = 0; x < GRID_WIDTH; ++x) {
+                int neighbors = countNeighbors(x, y);
+                nextGrid[y][x] = (grid[y][x] && (neighbors == 2 || neighbors == 3)) || (!grid[y][x] && neighbors == 3);
+            }
+        }
+    }
+
+    void renderBlock(int startY, int endY, Uint32* pixelData) {
+        for (int y = startY; y < endY; ++y) {
+            for (int x = 0; x < GRID_WIDTH; ++x) {
+                pixelData[y * GRID_WIDTH + x] = grid[y][x] ? 0xFFFFFFFF : 0x000000FF;
+            }
+        }
+    }
+
+public:
+    Game() : window(nullptr), renderer(nullptr), texture(nullptr), frameCount(0), fps(0) {
+        grid.resize(GRID_HEIGHT, std::vector<bool>(GRID_WIDTH, false));
+        nextGrid.resize(GRID_HEIGHT, std::vector<bool>(GRID_WIDTH, false));
+        lastTime = std::chrono::high_resolution_clock::now();
+    }
+
+    bool init() {
+        if (SDL_Init(SDL_INIT_VIDEO) < 0) {
+            std::cerr << "Error al iniciar SDL: " << SDL_GetError() << std::endl;
+            return false;
+        }
+
+        window = SDL_CreateWindow("Conway's Game of Life", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, SCREEN_WIDTH, SCREEN_HEIGHT, SDL_WINDOW_SHOWN);
+        if (!window) {
+            std::cerr << "Error al crear ventana: " << SDL_GetError() << std::endl;
+            return false;
+        }
+
+        renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED);
+        if (!renderer) {
+            std::cerr << "Error al crear renderer: " << SDL_GetError() << std::endl;
+            return false;
+        }
+
+        texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA8888, SDL_TEXTUREACCESS_STREAMING, GRID_WIDTH, GRID_HEIGHT);
+        if (!texture) {
+            std::cerr << "Error al crear textura: " << SDL_GetError() << std::endl;
+            return false;
+        }
+
+        std::cout << "Inicialización completada" << std::endl;
+        return true;
+    }
+
+
+    void updateWindowTitle() {
+        std::string title = "Conway's Game of Life - FPS: " + std::to_string(static_cast<int>(fps));
+        SDL_SetWindowTitle(window, title.c_str());
+    }
+
+    void calculateFPS() {
+        frameCount++;
+        auto currentTime = std::chrono::high_resolution_clock::now();
+        float duration = std::chrono::duration<float, std::chrono::seconds::period>(currentTime - lastTime).count();
+
+        if (duration > 1.0f) {
+            fps = frameCount / duration;
+            frameCount = 0;
+            lastTime = currentTime;
+            updateWindowTitle();
+        }
+    }
+
+    int countNeighbors(int x, int y) {
+        int count = 0;
+        for (int dy = -1; dy <= 1; ++dy) {
+            for (int dx = -1; dx <= 1; ++dx) {
+                if (dx == 0 && dy == 0) continue;
+                int nx = (x + dx + GRID_WIDTH) % GRID_WIDTH;
+                int ny = (y + dy + GRID_HEIGHT) % GRID_HEIGHT;
+                count += grid[ny][nx];
+            }
+        }
+        return count;
+    }
+
+    void update() {
+    for (int y = 0; y < GRID_HEIGHT; ++y) {
+        for (int x = 0; x < GRID_WIDTH; ++x) {
+            int neighbors = countNeighbors(x, y);
+            nextGrid[y][x] = (grid[y][x] && (neighbors == 2 || neighbors == 3)) || (!grid[y][x] && neighbors == 3);
+        }
+    }
+    std::swap(grid, nextGrid);
+}
+
+
+
+    void render() {
+        void* pixels;
+        int pitch;
+
+        // Lock the texture to access pixel data
+        if (SDL_LockTexture(texture, nullptr, &pixels, &pitch) != 0) {
+            std::cerr << "Error al bloquear la textura: " << SDL_GetError() << std::endl;
+            return;
+        }
+
+        Uint32* pixelData = static_cast<Uint32*>(pixels);
+
+        // Fill the texture with the grid data
+        for (int y = 0; y < GRID_HEIGHT; ++y) {
+            for (int x = 0; x < GRID_WIDTH; ++x) {
+                pixelData[y * GRID_WIDTH + x] = grid[y][x] ? 0xFFFFFFFF : 0x000000FF;
+            }
+        }
+
+        SDL_UnlockTexture(texture);
+
+        // Clear the screen and copy the texture to the renderer
+        SDL_RenderClear(renderer);
+        SDL_RenderCopy(renderer, texture, nullptr, nullptr);
+        SDL_RenderPresent(renderer);
+    }
+
+
+
+    void run() {
+        bool quit = false;
+        SDL_Event e;
+
+        while (!quit) {
+            while (SDL_PollEvent(&e) != 0) {
+                if (e.type == SDL_QUIT) {
+                    quit = true;
+                }
+            }
+
+            update();
+            render();
+            calculateFPS();
+            SDL_Delay(16);  // Limita a aproximadamente 60 FPS
+        }
+    }
+
+    void close() {
+        SDL_DestroyTexture(texture);
+        SDL_DestroyRenderer(renderer);
+        SDL_DestroyWindow(window);
+        SDL_Quit();
+    }
+};
+
+int main(int argc, char* args[]) {
+    Game game;
+    if (!game.init()) {
+        return 1;
+    }
+    game.run();
+    game.close();
+    return 0;
+}
