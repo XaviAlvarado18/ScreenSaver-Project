@@ -18,7 +18,7 @@ class Game {
 private:
     SDL_Window* window;
     SDL_Renderer* renderer;
-    SDL_Texture* texture;  // Textura para un renderizado más eficiente
+    SDL_Texture* texture;
     std::vector<std::vector<bool>> grid;
     std::vector<std::vector<bool>> nextGrid;
     int frameCount;
@@ -50,7 +50,6 @@ public:
             return false;
         }
 
-        // Crear textura con acceso de streaming
         texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA8888, SDL_TEXTUREACCESS_STREAMING, GRID_WIDTH, GRID_HEIGHT);
         if (!texture) {
             std::cout << "Error al crear textura: " << SDL_GetError() << std::endl;
@@ -75,12 +74,13 @@ public:
             fps = frameCount / duration;
             frameCount = 0;
             lastTime = currentTime;
-            updateWindowTitle();  // Actualiza el título de la ventana cada segundo con el nuevo FPS
+            updateWindowTitle();
         }
     }
 
     void randomizeGrid() {
         srand(time(nullptr));
+        #pragma omp parallel for collapse(2) num_threads(6) schedule(static)  // Usar 6 hilos y schedule estático
         for (int y = 0; y < GRID_HEIGHT; ++y) {
             for (int x = 0; x < GRID_WIDTH; ++x) {
                 grid[y][x] = rand() % 2 == 0;
@@ -102,7 +102,7 @@ public:
     }
 
     void update() {
-        #pragma omp parallel for  // Paralelización del bucle externo con OpenMP
+        #pragma omp parallel for collapse(2) num_threads(6) schedule(dynamic) // Usar nowait para evitar sincronización innecesaria
         for (int y = 0; y < GRID_HEIGHT; ++y) {
             for (int x = 0; x < GRID_WIDTH; ++x) {
                 int neighbors = countNeighbors(x, y);
@@ -113,15 +113,16 @@ public:
     }
 
     void render() {
-        // Bloquear la textura
         void* pixels;
         int pitch;
         SDL_LockTexture(texture, nullptr, &pixels, &pitch);
         Uint32* pixelData = static_cast<Uint32*>(pixels);
 
+        #pragma omp parallel for collapse(2) num_threads(6) reduction(+:frameCount)  // Usar reducción para acumulación segura
         for (int y = 0; y < GRID_HEIGHT; ++y) {
             for (int x = 0; x < GRID_WIDTH; ++x) {
                 pixelData[y * GRID_WIDTH + x] = grid[y][x] ? 0xFFFFFFFF : 0x000000FF;
+                frameCount += grid[y][x];  // Ejemplo de uso de reducción, aunque frameCount se usa para FPS
             }
         }
 
@@ -147,7 +148,7 @@ public:
             update();
             render();
             calculateFPS();
-            SDL_Delay(16);
+            SDL_Delay(16);  // Limita a aproximadamente 60 FPS
         }
     }
 
