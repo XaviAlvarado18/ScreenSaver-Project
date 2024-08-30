@@ -7,9 +7,9 @@
 #include <chrono>
 #include <string>
 
-const int SCREEN_WIDTH = 800;
-const int SCREEN_HEIGHT = 600;
-const int CELL_SIZE = 8;
+const int SCREEN_WIDTH = 1840;
+const int SCREEN_HEIGHT = 1155;
+const int CELL_SIZE = 6;
 const int GRID_WIDTH = SCREEN_WIDTH / CELL_SIZE;
 const int GRID_HEIGHT = SCREEN_HEIGHT / CELL_SIZE;
 const int TARGET_FPS = 60;
@@ -94,7 +94,18 @@ public:
         std::vector<std::vector<std::vector<int>>> patterns = {
             {{0, 1, 0}, {0, 0, 1}, {1, 1, 1}},  // Glider
             {{1, 1}, {1, 1}},                  // Block
-            {{1, 1, 1}}                        // Blinker
+            {{1, 1, 1}},                       // Blinker
+            {{0, 1, 1, 1}, {1, 1, 1, 0}},      // Toad
+            {{1, 1, 0, 0}, {1, 1, 0, 0}, {0, 0, 1, 1}, {0, 0, 1, 1}}, // Beacon
+            {
+                {0, 0, 0, 1, 1, 0, 0, 0, 1, 1, 0, 0, 0}, 
+                {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, 
+                {1, 1, 0, 0, 0, 0, 1, 1, 0, 0, 0, 1, 1}, 
+                {0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0}, 
+                {0, 0, 0, 1, 1, 0, 0, 0, 1, 1, 0, 0, 0}
+            },  // Pulsar
+            {{0, 1, 1, 1, 1}, {1, 0, 0, 0, 1}}, // LWSS (Lightweight Spaceship)
+            {{1, 1, 1, 1, 1, 1, 1, 1, 1, 1}}    // Pentadecathlon
         };
 
         srand(time(nullptr));
