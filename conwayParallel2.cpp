@@ -10,7 +10,7 @@
 
 const int SCREEN_WIDTH = 1840;
 const int SCREEN_HEIGHT = 1155;
-const int CELL_SIZE = 6;
+const int CELL_SIZE = 12;
 const int GRID_WIDTH = SCREEN_WIDTH / CELL_SIZE;
 const int GRID_HEIGHT = SCREEN_HEIGHT / CELL_SIZE;
 const int TARGET_FPS = 60;
@@ -101,6 +101,14 @@ public:
     }
 
 
+    Uint32 generateColorFromIndex(int index) {
+        // Genera un color "pseudoaleatorio" basado en el índice
+        Uint8 r = (index * 123 + 45) % 256;
+        Uint8 g = (index * 67 + 89) % 256;
+        Uint8 b = (index * 89 + 123) % 256;
+        return (r << 24) | (g << 16) | (b << 8) | 0xFF; // Color RGBA
+    }
+
     void generateFigures() {
         std::vector<std::vector<std::vector<int>>> patterns = {
             {{0, 1, 0}, {0, 0, 1}, {1, 1, 1}},  // Glider
@@ -119,18 +127,6 @@ public:
             {{1, 1, 1, 1, 1, 1, 1, 1, 1, 1}}    // Pentadecathlon
         };
 
-        // Colores predefinidos para cada patrón
-        std::vector<Uint32> colors = {
-            0xFF0000FF, // Rojo
-            0x00FF00FF, // Verde
-            0x0000FFFF, // Azul
-            0xFFFF00FF, // Amarillo
-            0xFF00FFFF, // Magenta
-            0x00FFFFFF, // Cian
-            0xFF8800FF, // Naranja
-            0x888888FF  // Gris
-        };
-
         srand(time(nullptr));
 
         auto start = std::chrono::high_resolution_clock::now(); // Iniciar medición de tiempo
@@ -140,7 +136,8 @@ public:
             int patternIndex = rand() % patterns.size();
             int x = rand() % GRID_WIDTH;
             int y = rand() % GRID_HEIGHT;
-            placePattern(x, y, patterns[patternIndex], colors[patternIndex]); // Asignar color según el patrón
+            Uint32 color = generateColorFromIndex(patternIndex); // Generar color pseudoaleatorio basado en el índice
+            placePattern(x, y, patterns[patternIndex], color); // Asignar color según el patrón
         }
 
         auto end = std::chrono::high_resolution_clock::now(); // Fin de medición de tiempo
