@@ -7,12 +7,18 @@
 #include <chrono>
 #include <string>
 #include <omp.h>  // Incluir la biblioteca de OpenMP
+#include <unordered_map>
+#include <queue>
 
 const int SCREEN_WIDTH = 800;
 const int SCREEN_HEIGHT = 600;
 const int CELL_SIZE = 10;
 const int GRID_WIDTH = SCREEN_WIDTH / CELL_SIZE;
 const int GRID_HEIGHT = SCREEN_HEIGHT / CELL_SIZE;
+
+struct Color {
+    Uint8 r, g, b, a;
+};
 
 class Game {
 private:
@@ -21,6 +27,8 @@ private:
     SDL_Texture* texture;
     std::vector<std::vector<bool>> grid;
     std::vector<std::vector<bool>> nextGrid;
+    std::vector<std::vector<int>> figureIds; // Identificador de figuras
+    std::unordered_map<int, Color> figureColors;
     int frameCount;
     std::chrono::time_point<std::chrono::high_resolution_clock> lastTime;
     float fps;
@@ -29,6 +37,7 @@ public:
     Game() : window(nullptr), renderer(nullptr), texture(nullptr), frameCount(0), fps(0) {
         grid.resize(GRID_HEIGHT, std::vector<bool>(GRID_WIDTH, false));
         nextGrid.resize(GRID_HEIGHT, std::vector<bool>(GRID_WIDTH, false));
+        figureIds.resize(GRID_HEIGHT, std::vector<int>(GRID_WIDTH, -1));
         lastTime = std::chrono::high_resolution_clock::now();
     }
 
@@ -86,6 +95,64 @@ public:
                 grid[y][x] = rand() % 2 == 0;
             }
         }
+
+        assignFigureColors();
+    }
+
+    void assignFigureColors() {
+        int figureId = 0;
+        figureColors.clear();
+
+        // Paralelizar la inicialización de identificadores de figuras
+        #pragma omp parallel for num_threads(6) schedule(static)
+        for (int y = 0; y < GRID_HEIGHT; ++y) {
+            std::fill(figureIds[y].begin(), figureIds[y].end(), -1);
+        }
+
+        // La parte de identificación de figuras no se paraleliza directamente por las dependencias
+        #pragma omp parallel for num_threads(6) schedule(static)
+        for (int y = 0; y < GRID_HEIGHT; ++y) {
+            for (int x = 0; x < GRID_WIDTH; ++x) {
+                if (grid[y][x] && figureIds[y][x] == -1) {
+                    assignFigureId(x, y, figureId);
+
+                    // Bloque crítico para evitar condiciones de carrera al acceder a figureColors
+                    #pragma omp critical
+                    {
+                        figureColors[figureId] = generateRandomColor();
+                        figureId++;
+                    }
+                }
+            }
+        }
+    }
+
+    void assignFigureId(int startX, int startY, int figureId) {
+        std::queue<std::pair<int, int>> toVisit;
+        toVisit.push({startX, startY});
+
+        while (!toVisit.empty()) {
+            auto [x, y] = toVisit.front();
+            toVisit.pop();
+
+            // Verificar límites y si ya fue visitado
+            if (x < 0 || x >= GRID_WIDTH || y < 0 || y >= GRID_HEIGHT) continue;
+            if (!grid[y][x] || figureIds[y][x] != -1) continue;
+
+            // Marcar la célula con el identificador de la figura
+            figureIds[y][x] = figureId;
+
+            // Agregar las células vecinas a la cola
+            toVisit.push({x - 1, y});
+            toVisit.push({x + 1, y});
+            toVisit.push({x, y - 1});
+            toVisit.push({x, y + 1});
+        }
+    }
+
+
+    Color generateRandomColor() {
+        return { static_cast<Uint8>(rand() % 256), static_cast<Uint8>(rand() % 256), static_cast<Uint8>(rand() % 256), 255 };
     }
 
     int countNeighbors(int x, int y) {
@@ -121,8 +188,13 @@ public:
         #pragma omp parallel for collapse(2) num_threads(6) reduction(+:frameCount)  // Usar reducción para acumulación segura
         for (int y = 0; y < GRID_HEIGHT; ++y) {
             for (int x = 0; x < GRID_WIDTH; ++x) {
-                pixelData[y * GRID_WIDTH + x] = grid[y][x] ? 0xFFFFFFFF : 0x000000FF;
-                frameCount += grid[y][x];  // Ejemplo de uso de reducción, aunque frameCount se usa para FPS
+                if (grid[y][x]) {
+                    int figureId = figureIds[y][x];
+                    Color color = figureColors[figureId];
+                    pixelData[y * GRID_WIDTH + x] = SDL_MapRGBA(SDL_AllocFormat(SDL_PIXELFORMAT_RGBA8888), color.r, color.g, color.b, color.a);
+                } else {
+                    pixelData[y * GRID_WIDTH + x] = 0x000000FF; // Células muertas en negro
+                }
             }
         }
 
