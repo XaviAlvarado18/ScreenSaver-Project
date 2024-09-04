@@ -160,6 +160,8 @@ public:
             placePattern(x, y, patterns[patternIndex], color); 
         }
 
+        #pragma omp barrier
+
         auto end = std::chrono::high_resolution_clock::now(); // Fin de medición de tiempo
         std::chrono::duration<double> duration = end - start;
         std::cout << "Tiempo para generar figuras: " << duration.count() << " segundos" << std::endl;
