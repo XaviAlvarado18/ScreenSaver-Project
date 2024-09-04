@@ -7,13 +7,7 @@
 #include <chrono>
 #include <string>
 
-const int SCREEN_WIDTH = 1840;
-const int SCREEN_HEIGHT = 1155;
 const int CELL_SIZE = 6;
-const int GRID_WIDTH = SCREEN_WIDTH / CELL_SIZE;
-const int GRID_HEIGHT = SCREEN_HEIGHT / CELL_SIZE;
-const int TARGET_FPS = 60;
-const int FRAME_DELAY = 1000 / TARGET_FPS;
 
 class Game {
 private:
@@ -26,35 +20,47 @@ private:
     std::chrono::time_point<std::chrono::high_resolution_clock> lastTime;
     float fps;
     int numObjects;
+    int screenWidth;
+    int screenHeight;
+    int gridWidth;
+    int gridHeight;
+    int frameDelay;
 
 public:
-    Game(int objects) : window(nullptr), renderer(nullptr), texture(nullptr), frameCount(0), fps(0), numObjects(objects) {
-        grid.resize(GRID_HEIGHT, std::vector<bool>(GRID_WIDTH, false));
-        nextGrid.resize(GRID_HEIGHT, std::vector<bool>(GRID_WIDTH, false));
+    Game(int objects, int width, int height)
+        : window(nullptr), renderer(nullptr), texture(nullptr), frameCount(0), fps(0),
+          numObjects(objects), screenWidth(width), screenHeight(height) {
+        gridWidth = screenWidth / CELL_SIZE;
+        gridHeight = screenHeight / CELL_SIZE;
+        frameDelay = 1000 / 60;  // TARGET_FPS = 60
+
+        grid.resize(gridHeight, std::vector<bool>(gridWidth, false));
+        nextGrid.resize(gridHeight, std::vector<bool>(gridWidth, false));
         lastTime = std::chrono::high_resolution_clock::now();
     }
 
     bool init() {
         if (SDL_Init(SDL_INIT_VIDEO) < 0) {
-            std::cout << "Error al iniciar SDL: " << SDL_GetError() << std::endl;
+            std::cerr << "Error al iniciar SDL: " << SDL_GetError() << std::endl;
             return false;
         }
 
-        window = SDL_CreateWindow("Conway's Game of Life", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, SCREEN_WIDTH, SCREEN_HEIGHT, SDL_WINDOW_SHOWN);
+        window = SDL_CreateWindow("Conway's Game of Life", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED,
+                                  screenWidth, screenHeight, SDL_WINDOW_SHOWN);
         if (!window) {
-            std::cout << "Error al crear ventana: " << SDL_GetError() << std::endl;
+            std::cerr << "Error al crear ventana: " << SDL_GetError() << std::endl;
             return false;
         }
 
         renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED);
         if (!renderer) {
-            std::cout << "Error al crear renderer: " << SDL_GetError() << std::endl;
+            std::cerr << "Error al crear renderer: " << SDL_GetError() << std::endl;
             return false;
         }
 
-        texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA8888, SDL_TEXTUREACCESS_STREAMING, GRID_WIDTH, GRID_HEIGHT);
+        texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA8888, SDL_TEXTUREACCESS_STREAMING, gridWidth, gridHeight);
         if (!texture) {
-            std::cout << "Error al crear textura: " << SDL_GetError() << std::endl;
+            std::cerr << "Error al crear textura: " << SDL_GetError() << std::endl;
             return false;
         }
 
@@ -84,7 +90,7 @@ public:
         for (int i = 0; i < pattern.size(); ++i) {
             for (int j = 0; j < pattern[i].size(); ++j) {
                 if (pattern[i][j] == 1) {
-                    grid[(y + i) % GRID_HEIGHT][(x + j) % GRID_WIDTH] = true;
+                    grid[(y + i) % gridHeight][(x + j) % gridWidth] = true;
                 }
             }
         }
@@ -114,8 +120,8 @@ public:
 
         for (int i = 0; i < numObjects; ++i) {
             int patternIndex = rand() % patterns.size();
-            int x = rand() % GRID_WIDTH;
-            int y = rand() % GRID_HEIGHT;
+            int x = rand() % gridWidth;
+            int y = rand() % gridHeight;
             placePattern(x, y, patterns[patternIndex]);
         }
 
@@ -130,8 +136,8 @@ public:
         auto start = std::chrono::high_resolution_clock::now();
 
         while (objectsPlaced < numObjects) {
-            int x = rand() % GRID_WIDTH;
-            int y = rand() % GRID_HEIGHT;
+            int x = rand() % gridWidth;
+            int y = rand() % gridHeight;
             if (!grid[y][x]) {
                 grid[y][x] = true;
                 objectsPlaced++;
@@ -140,8 +146,8 @@ public:
             auto current = std::chrono::high_resolution_clock::now();
             std::chrono::duration<double, std::milli> elapsed = current - start;
 
-            if (elapsed.count() > FRAME_DELAY) {
-                SDL_Delay(FRAME_DELAY - elapsed.count());
+            if (elapsed.count() > frameDelay) {
+                SDL_Delay(frameDelay - elapsed.count());
                 calculateFPS();
                 start = std::chrono::high_resolution_clock::now();
             }
@@ -157,8 +163,8 @@ public:
         for (int dy = -1; dy <= 1; ++dy) {
             for (int dx = -1; dx <= 1; ++dx) {
                 if (dx == 0 && dy == 0) continue;
-                int nx = (x + dx + GRID_WIDTH) % GRID_WIDTH;
-                int ny = (y + dy + GRID_HEIGHT) % GRID_HEIGHT;
+                int nx = (x + dx + gridWidth) % gridWidth;
+                int ny = (y + dy + gridHeight) % gridHeight;
                 count += grid[ny][nx];
             }
         }
@@ -166,8 +172,8 @@ public:
     }
 
     void update() {
-        for (int y = 0; y < GRID_HEIGHT; ++y) {
-            for (int x = 0; x < GRID_WIDTH; ++x) {
+        for (int y = 0; y < gridHeight; ++y) {
+            for (int x = 0; x < gridWidth; ++x) {
                 int neighbors = countNeighbors(x, y);
                 nextGrid[y][x] = (grid[y][x] && (neighbors == 2 || neighbors == 3)) || (!grid[y][x] && neighbors == 3);
             }
@@ -176,14 +182,23 @@ public:
     }
 
     void render() {
+        if (!renderer || !texture) {
+            std::cerr << "Error: Renderer o textura no inicializados correctamente." << std::endl;
+            return;
+        }
+
         void* pixels;
         int pitch;
-        SDL_LockTexture(texture, nullptr, &pixels, &pitch);
+        if (SDL_LockTexture(texture, nullptr, &pixels, &pitch) != 0) {
+            std::cerr << "Error al bloquear la textura: " << SDL_GetError() << std::endl;
+            return;
+        }
+
         Uint32* pixelData = static_cast<Uint32*>(pixels);
 
-        for (int y = 0; y < GRID_HEIGHT; ++y) {
-            for (int x = 0; x < GRID_WIDTH; ++x) {
-                pixelData[y * GRID_WIDTH + x] = grid[y][x] ? 0xFFFFFFFF : 0x000000FF;
+        for (int y = 0; y < gridHeight; ++y) {
+            for (int x = 0; x < gridWidth; ++x) {
+                pixelData[y * gridWidth + x] = grid[y][x] ? 0xFFFFFFFF : 0x000000FF;
             }
         }
 
@@ -214,7 +229,7 @@ public:
 
             auto frameEnd = std::chrono::high_resolution_clock::now();
             std::chrono::duration<double, std::milli> frameDuration = frameEnd - frameStart;
-            int delay = FRAME_DELAY - static_cast<int>(frameDuration.count());
+            int delay = frameDelay - static_cast<int>(frameDuration.count());
             if (delay > 0) {
                 SDL_Delay(delay);
             }
@@ -222,27 +237,51 @@ public:
     }
 
     void close() {
-        SDL_DestroyTexture(texture);
-        SDL_DestroyRenderer(renderer);
-        SDL_DestroyWindow(window);
+        if (texture) {
+            SDL_DestroyTexture(texture);
+            texture = nullptr;
+        }
+        if (renderer) {
+            SDL_DestroyRenderer(renderer);
+            renderer = nullptr;
+        }
+        if (window) {
+            SDL_DestroyWindow(window);
+            window = nullptr;
+        }
+        TTF_Quit();
         SDL_Quit();
     }
 };
 
 int main(int argc, char* args[]) {
-    if (argc != 2) {
-        std::cout << "Uso: " << args[0] << " <número de objetos>" << std::endl;
+    if (argc != 4) {
+        std::cerr << "Uso: " << args[0] << " <número de objetos> <ancho de pantalla> <alto de pantalla>" << std::endl;
         return 1;
     }
 
-    int numObjects = std::atoi(args[1]);
-    if (numObjects <= 0 || numObjects > GRID_WIDTH * GRID_HEIGHT) {
-        std::cout << "El número de objetos debe ser positivo y no mayor que " << GRID_WIDTH * GRID_HEIGHT << std::endl;
+    char* end;
+    long numObjects = std::strtol(args[1], &end, 10);
+    if (*end != '\0' || numObjects <= 0) {
+        std::cerr << "El número de objetos debe ser un entero positivo." << std::endl;
         return 1;
     }
 
-    Game game(numObjects);
+    long screenWidth = std::strtol(args[2], &end, 10);
+    if (*end != '\0' || screenWidth <= 0) {
+        std::cerr << "El ancho de pantalla debe ser un entero positivo." << std::endl;
+        return 1;
+    }
+
+    long screenHeight = std::strtol(args[3], &end, 10);
+    if (*end != '\0' || screenHeight <= 0) {
+        std::cerr << "El alto de pantalla debe ser un entero positivo." << std::endl;
+        return 1;
+    }
+
+    Game game(static_cast<int>(numObjects), static_cast<int>(screenWidth), static_cast<int>(screenHeight));
     if (!game.init()) {
+        game.close();
         return 1;
     }
     game.run();
