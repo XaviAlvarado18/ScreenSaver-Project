@@ -12,17 +12,20 @@
 *.lib
 *.exe
 
-# Archivos de configuración de IDE
-*.idea/
-*.vscode/
-*.sublime-project
-*.sublime-workspace
+# Archivos binarios generados por la compilación
+conwaySeq
+conwayParallel
+conwayThreaded
 
 # Archivos temporales del sistema
 *.swp
 *.swo
 *.tmp
 *.log
+
+# Archivos específicos de sistemas operativos
+.DS_Store
+Thumbs.db
 
 # Archivos generados por el compilador
 *.gch
@@ -31,6 +34,8 @@
 *.gcov
 *.c~ 
 
-# Archivos específicos de sistemas operativos
-.DS_Store
-Thumbs.db
+# Directorios generados por IDEs y entornos de desarrollo
+.idea/
+.vscode/
+*.sublime-project
+*.sublime-workspace

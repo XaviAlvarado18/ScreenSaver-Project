@@ -1,22 +1,26 @@
 # Variables
 CXX = g++
-CXXFLAGS = -std=c++17 -Wall -O2
-LDFLAGS = `sdl2-config --cflags --libs` -lSDL2_ttf -pthread
+CXXFLAGS = -std=c++17 -Wall -O2 -fopenmp
+LDFLAGS = `sdl2-config --cflags --libs` -lSDL2_ttf -pthread -fopenmp
 
 # Objetivo por defecto
-all: conwaySeq conwayParallel conwayThreaded
+all: ScreenSaverSeq ScreenSaverParallel ScreenSaverParallel2 ScreenSaverParallelNotC ScreenSaverThreaded
 
-# Regla para compilar conwaySeq
-conwaySeq: conwaySeq.o
-	$(CXX) -o conwaySeq conwaySeq.o $(LDFLAGS)
+# Reglas para compilar ejecutables a partir de objetos
+ScreenSaverSeq: ScreenSaverSeq.o
+	$(CXX) -o ScreenSaverSeq ScreenSaverSeq.o $(LDFLAGS)
 
-# Regla para compilar conwayParallel
-conwayParallel: conwayParallel.o
-	$(CXX) -o conwayParallel conwayParallel.o $(LDFLAGS)
+ScreenSaverParallel: ScreenSaverParallel.o
+	$(CXX) -o ScreenSaverParallel ScreenSaverParallel.o $(LDFLAGS)
 
-# Regla para compilar conwayThreaded
-conwayThreaded: conwayThreaded.o
-	$(CXX) -o conwayThreaded conwayThreaded.o $(LDFLAGS)
+ScreenSaverParallel2: ScreenSaverParallel2.o
+	$(CXX) -o ScreenSaverParallel2 ScreenSaverParallel2.o $(LDFLAGS)
+
+ScreenSaverParallelNotC: ScreenSaverParallelNotC.o
+	$(CXX) -o ScreenSaverParallelNotC ScreenSaverParallelNotC.o $(LDFLAGS)
+
+ScreenSaverThreaded: ScreenSaverThreaded.o
+	$(CXX) -o ScreenSaverThreaded ScreenSaverThreaded.o $(LDFLAGS)
 
 # Regla para compilar archivos fuente a objetos
 %.o: %.cpp
@@ -24,4 +28,4 @@ conwayThreaded: conwayThreaded.o
 
 # Limpieza
 clean:
-	rm -f *.o conwaySeq conwayParallel conwayThreaded
+	rm -f *.o ScreenSaverSeq ScreenSaverParallel ScreenSaverParallel2 ScreenSaverParallelNotC ScreenSaverThreaded
