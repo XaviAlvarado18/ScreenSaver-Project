@@ -73,7 +73,8 @@ La paralelización se logra utilizando directivas de OpenMP como #pragma omp par
 
 ## Programas en ejecucion
 
-
+![GIf](assets/ScreenSaverSeq.gif)
+![GIf](assets/ScreenSaverParallel.gif)
 
 ## Resultados y Comparaciones
 
