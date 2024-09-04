@@ -4,11 +4,14 @@ CXXFLAGS = -std=c++17 -Wall -O2
 LDFLAGS = `sdl2-config --cflags --libs` -lSDL2_ttf -pthread
 
 # Objetivo por defecto
-all: ScreenSaverSeq ScreenSaverParallel ScreenSaverParallel2 ScreenSaverParallelNotC ScreenSaverThreaded
+all: ScreenSaverSeq ScreenSaverColorSeq ScreenSaverParallel ScreenSaverParallel2 ScreenSaverParallelNotC ScreenSaverThreaded
 
 # Reglas para compilar ejecutables a partir de objetos
 ScreenSaverSeq: ScreenSaverSeq.o
 	$(CXX) -o ScreenSaverSeq ScreenSaverSeq.o $(LDFLAGS)
+
+ScreenSaverColorSeq: ScreenSaverColorSeq.o
+	$(CXX) -o ScreenSaverColorSeq ScreenSaverColorSeq.o $(LDFLAGS)
 
 ScreenSaverParallel: ScreenSaverParallel.o
 	$(CXX) -o ScreenSaverParallel ScreenSaverParallel.o $(LDFLAGS)
