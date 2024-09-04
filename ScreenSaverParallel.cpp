@@ -1,3 +1,18 @@
+/*
+    Conway's Game of Life Parallel Version
+    =======================================
+    Este programa implementa una versión paralela del "Conway's Game of Life" utilizando
+    C++, la librería SDL para visualización gráfica, y OpenMP para paralelización.
+    
+    Características:
+    - Paralelización con OpenMP para mejorar el rendimiento.
+    - Visualización de figuras con colores aleatorios.
+    - Recibe parámetros de entrada para ajustar el número de células, ancho, alto y número de hilos.
+
+    Autores: [Kristopher Alvarado, David Aragon y Renatto Guzman]
+    Fecha: 05/09/2024
+*/
+
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_ttf.h>
 #include <vector>
@@ -9,12 +24,6 @@
 #include <omp.h>  // Incluir la biblioteca de OpenMP
 #include <unordered_map>
 #include <queue>
-
-const int SCREEN_WIDTH = 800;
-const int SCREEN_HEIGHT = 600;
-const int CELL_SIZE = 10;
-const int GRID_WIDTH = SCREEN_WIDTH / CELL_SIZE;
-const int GRID_HEIGHT = SCREEN_HEIGHT / CELL_SIZE;
 
 struct Color {
     Uint8 r, g, b, a;
@@ -32,36 +41,49 @@ private:
     int frameCount;
     std::chrono::time_point<std::chrono::high_resolution_clock> lastTime;
     float fps;
+    int screenWidth;
+    int screenHeight;
+    int cellSize;
+    int gridWidth;
+    int gridHeight;
+    int numObjects;
+    int numThreads; // Número de hilos
 
 public:
-    Game() : window(nullptr), renderer(nullptr), texture(nullptr), frameCount(0), fps(0) {
-        grid.resize(GRID_HEIGHT, std::vector<bool>(GRID_WIDTH, false));
-        nextGrid.resize(GRID_HEIGHT, std::vector<bool>(GRID_WIDTH, false));
-        figureIds.resize(GRID_HEIGHT, std::vector<int>(GRID_WIDTH, -1));
+    Game(int objects, int width, int height, int threads, int cell_size = 10) 
+        : window(nullptr), renderer(nullptr), texture(nullptr), frameCount(0), fps(0),
+          numObjects(objects), screenWidth(width), screenHeight(height), cellSize(cell_size), numThreads(threads) {
+        gridWidth = screenWidth / cellSize;
+        gridHeight = screenHeight / cellSize;
+
+        grid.resize(gridHeight, std::vector<bool>(gridWidth, false));
+        nextGrid.resize(gridHeight, std::vector<bool>(gridWidth, false));
+        figureIds.resize(gridHeight, std::vector<int>(gridWidth, -1));
         lastTime = std::chrono::high_resolution_clock::now();
     }
 
     bool init() {
         if (SDL_Init(SDL_INIT_VIDEO) < 0) {
-            std::cout << "Error al iniciar SDL: " << SDL_GetError() << std::endl;
+            std::cerr << "Error al iniciar SDL: " << SDL_GetError() << std::endl;
             return false;
         }
 
-        window = SDL_CreateWindow("Conway's Game of Life", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, SCREEN_WIDTH, SCREEN_HEIGHT, SDL_WINDOW_SHOWN);
+        window = SDL_CreateWindow("Conway's Game of Life", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, 
+                                  screenWidth, screenHeight, SDL_WINDOW_SHOWN);
         if (!window) {
-            std::cout << "Error al crear ventana: " << SDL_GetError() << std::endl;
+            std::cerr << "Error al crear ventana: " << SDL_GetError() << std::endl;
             return false;
         }
 
         renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED);
         if (!renderer) {
-            std::cout << "Error al crear renderer: " << SDL_GetError() << std::endl;
+            std::cerr << "Error al crear renderer: " << SDL_GetError() << std::endl;
             return false;
         }
 
-        texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA8888, SDL_TEXTUREACCESS_STREAMING, GRID_WIDTH, GRID_HEIGHT);
+        texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA8888, SDL_TEXTUREACCESS_STREAMING, gridWidth, gridHeight);
         if (!texture) {
-            std::cout << "Error al crear textura: " << SDL_GetError() << std::endl;
+            std::cerr << "Error al crear textura: " << SDL_GetError() << std::endl;
             return false;
         }
 
@@ -89,10 +111,24 @@ public:
 
     void randomizeGrid() {
         srand(time(nullptr));
-        #pragma omp parallel for collapse(2) num_threads(6) schedule(static)  // Usar 6 hilos y schedule estático
-        for (int y = 0; y < GRID_HEIGHT; ++y) {
-            for (int x = 0; x < GRID_WIDTH; ++x) {
-                grid[y][x] = rand() % 2 == 0;
+        int objectsPlaced = 0;  // Contador para rastrear el número de células activadas
+
+        #pragma omp parallel for collapse(2) num_threads(numThreads) schedule(static)
+        for (int y = 0; y < gridHeight; ++y) {
+            for (int x = 0; x < gridWidth; ++x) {
+                if (objectsPlaced < numObjects) {  // Verifica si aún necesitas más objetos
+                    bool shouldPlace = rand() % 2 == 0;
+
+                    if (shouldPlace) {
+                        #pragma omp atomic
+                        objectsPlaced++;  // Incrementar de manera atómica
+
+                        // Solo activa la célula si no se ha superado el límite de objetos
+                        if (objectsPlaced <= numObjects) {
+                            grid[y][x] = true;
+                        }
+                    }
+                }
             }
         }
 
@@ -103,20 +139,17 @@ public:
         int figureId = 0;
         figureColors.clear();
 
-        // Paralelizar la inicialización de identificadores de figuras
-        #pragma omp parallel for num_threads(6) schedule(static)
-        for (int y = 0; y < GRID_HEIGHT; ++y) {
+        #pragma omp parallel for num_threads(numThreads) schedule(static)
+        for (int y = 0; y < gridHeight; ++y) {
             std::fill(figureIds[y].begin(), figureIds[y].end(), -1);
         }
 
-        // La parte de identificación de figuras no se paraleliza directamente por las dependencias
-        #pragma omp parallel for num_threads(6) schedule(static)
-        for (int y = 0; y < GRID_HEIGHT; ++y) {
-            for (int x = 0; x < GRID_WIDTH; ++x) {
+        #pragma omp parallel for num_threads(numThreads) schedule(static)
+        for (int y = 0; y < gridHeight; ++y) {
+            for (int x = 0; x < gridWidth; ++x) {
                 if (grid[y][x] && figureIds[y][x] == -1) {
                     assignFigureId(x, y, figureId);
 
-                    // Bloque crítico para evitar condiciones de carrera al acceder a figureColors
                     #pragma omp critical
                     {
                         figureColors[figureId] = generateRandomColor();
@@ -135,21 +168,17 @@ public:
             auto [x, y] = toVisit.front();
             toVisit.pop();
 
-            // Verificar límites y si ya fue visitado
-            if (x < 0 || x >= GRID_WIDTH || y < 0 || y >= GRID_HEIGHT) continue;
+            if (x < 0 || x >= gridWidth || y < 0 || y >= gridHeight) continue;
             if (!grid[y][x] || figureIds[y][x] != -1) continue;
 
-            // Marcar la célula con el identificador de la figura
             figureIds[y][x] = figureId;
 
-            // Agregar las células vecinas a la cola
             toVisit.push({x - 1, y});
             toVisit.push({x + 1, y});
             toVisit.push({x, y - 1});
             toVisit.push({x, y + 1});
         }
     }
-
 
     Color generateRandomColor() {
         return { static_cast<Uint8>(rand() % 256), static_cast<Uint8>(rand() % 256), static_cast<Uint8>(rand() % 256), 255 };
@@ -160,8 +189,8 @@ public:
         for (int dy = -1; dy <= 1; ++dy) {
             for (int dx = -1; dx <= 1; ++dx) {
                 if (dx == 0 && dy == 0) continue;
-                int nx = (x + dx + GRID_WIDTH) % GRID_WIDTH;
-                int ny = (y + dy + GRID_HEIGHT) % GRID_HEIGHT;
+                int nx = (x + dx + gridWidth) % gridWidth;
+                int ny = (y + dy + gridHeight) % gridHeight;
                 count += grid[ny][nx];
             }
         }
@@ -169,9 +198,9 @@ public:
     }
 
     void update() {
-        #pragma omp parallel for collapse(2) num_threads(6) schedule(dynamic) // Usar nowait para evitar sincronización innecesaria
-        for (int y = 0; y < GRID_HEIGHT; ++y) {
-            for (int x = 0; x < GRID_WIDTH; ++x) {
+        #pragma omp parallel for collapse(2) num_threads(numThreads) schedule(dynamic) 
+        for (int y = 0; y < gridHeight; ++y) {
+            for (int x = 0; x < gridWidth; ++x) {
                 int neighbors = countNeighbors(x, y);
                 nextGrid[y][x] = (grid[y][x] && (neighbors == 2 || neighbors == 3)) || (!grid[y][x] && neighbors == 3);
             }
@@ -185,15 +214,15 @@ public:
         SDL_LockTexture(texture, nullptr, &pixels, &pitch);
         Uint32* pixelData = static_cast<Uint32*>(pixels);
 
-        #pragma omp parallel for collapse(2) num_threads(6) reduction(+:frameCount)  // Usar reducción para acumulación segura
-        for (int y = 0; y < GRID_HEIGHT; ++y) {
-            for (int x = 0; x < GRID_WIDTH; ++x) {
+        #pragma omp parallel for collapse(2) num_threads(numThreads) reduction(+:frameCount)  
+        for (int y = 0; y < gridHeight; ++y) {
+            for (int x = 0; x < gridWidth; ++x) {
                 if (grid[y][x]) {
                     int figureId = figureIds[y][x];
                     Color color = figureColors[figureId];
-                    pixelData[y * GRID_WIDTH + x] = SDL_MapRGBA(SDL_AllocFormat(SDL_PIXELFORMAT_RGBA8888), color.r, color.g, color.b, color.a);
+                    pixelData[y * gridWidth + x] = SDL_MapRGBA(SDL_AllocFormat(SDL_PIXELFORMAT_RGBA8888), color.r, color.g, color.b, color.a);
                 } else {
-                    pixelData[y * GRID_WIDTH + x] = 0x000000FF; // Células muertas en negro
+                    pixelData[y * gridWidth + x] = 0x000000FF;
                 }
             }
         }
@@ -225,16 +254,41 @@ public:
     }
 
     void close() {
-        SDL_DestroyTexture(texture);
-        SDL_DestroyRenderer(renderer);
-        SDL_DestroyWindow(window);
+        if (texture) {
+            SDL_DestroyTexture(texture);
+            texture = nullptr;
+        }
+        if (renderer) {
+            SDL_DestroyRenderer(renderer);
+            renderer = nullptr;
+        }
+        if (window) {
+            SDL_DestroyWindow(window);
+            window = nullptr;
+        }
         SDL_Quit();
     }
 };
 
 int main(int argc, char* args[]) {
-    Game game;
+    if (argc != 5) {
+        std::cerr << "Uso: " << args[0] << " <número de células> <ancho> <alto> <número de hilos>" << std::endl;
+        return 1;
+    }
+
+    int numObjects = std::atoi(args[1]);
+    int screenWidth = std::atoi(args[2]);
+    int screenHeight = std::atoi(args[3]);
+    int numThreads = std::atoi(args[4]);
+
+    if (numObjects <= 0 || screenWidth <= 0 || screenHeight <= 0 || numThreads <= 0) {
+        std::cerr << "Todos los parámetros deben ser positivos y mayores que cero." << std::endl;
+        return 1;
+    }
+
+    Game game(numObjects, screenWidth, screenHeight, numThreads);
     if (!game.init()) {
+        game.close();
         return 1;
     }
     game.run();

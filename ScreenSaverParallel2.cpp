@@ -1,3 +1,18 @@
+/*
+    Conway's Game of Life Parallel Version - Parallel2
+    ==================================================
+    Este programa implementa una versión paralela del "Conway's Game of Life" utilizando
+    C++, la librería SDL para visualización gráfica, y OpenMP para paralelización.
+    
+    Características:
+    - Paralelización con OpenMP para mejorar el rendimiento.
+    - Visualización de figuras con colores aleatorios.
+    - Recibe parámetros de entrada para ajustar el número de células, ancho, alto y número de hilos.
+
+    Autores: [Kristopher Alvarado, David Aragon y Renatto Guzman]
+    Fecha: 05/09/2024
+*/
+
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_ttf.h>
 #include <vector>
@@ -7,14 +22,6 @@
 #include <chrono>
 #include <string>
 #include <omp.h> // Incluir OpenMP
-
-const int SCREEN_WIDTH = 1840;
-const int SCREEN_HEIGHT = 1155;
-const int CELL_SIZE = 12;
-const int GRID_WIDTH = SCREEN_WIDTH / CELL_SIZE;
-const int GRID_HEIGHT = SCREEN_HEIGHT / CELL_SIZE;
-const int TARGET_FPS = 60;
-const int FRAME_DELAY = 1000 / TARGET_FPS;
 
 class Game {
 private:
@@ -27,13 +34,24 @@ private:
     int frameCount;
     std::chrono::time_point<std::chrono::high_resolution_clock> lastTime;
     float fps;
+    int screenWidth;
+    int screenHeight;
+    int cellSize;
+    int gridWidth;
+    int gridHeight;
     int numObjects;
+    int numThreads; // Número de hilos
 
 public:
-    Game(int objects) : window(nullptr), renderer(nullptr), texture(nullptr), frameCount(0), fps(0), numObjects(objects) {
-        grid.resize(GRID_HEIGHT, std::vector<bool>(GRID_WIDTH, false));
-        nextGrid.resize(GRID_HEIGHT, std::vector<bool>(GRID_WIDTH, false));
-        colorGrid.resize(GRID_HEIGHT, std::vector<Uint32>(GRID_WIDTH, 0x000000FF)); // Inicializar color de fondo
+    Game(int objects, int width, int height, int threads, int cell_size = 12)
+        : window(nullptr), renderer(nullptr), texture(nullptr), frameCount(0), fps(0),
+          numObjects(objects), screenWidth(width), screenHeight(height), cellSize(cell_size), numThreads(threads) {
+        gridWidth = screenWidth / cellSize;
+        gridHeight = screenHeight / cellSize;
+
+        grid.resize(gridHeight, std::vector<bool>(gridWidth, false));
+        nextGrid.resize(gridHeight, std::vector<bool>(gridWidth, false));
+        colorGrid.resize(gridHeight, std::vector<Uint32>(gridWidth, 0x000000FF)); // Inicializar color de fondo
         lastTime = std::chrono::high_resolution_clock::now();
     }
 
@@ -43,7 +61,8 @@ public:
             return false;
         }
 
-        window = SDL_CreateWindow("Conway's Game of Life", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, SCREEN_WIDTH, SCREEN_HEIGHT, SDL_WINDOW_SHOWN);
+        window = SDL_CreateWindow("Conway's Game of Life", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, 
+                                  screenWidth, screenHeight, SDL_WINDOW_SHOWN);
         if (!window) {
             std::cout << "Error al crear ventana: " << SDL_GetError() << std::endl;
             return false;
@@ -55,7 +74,7 @@ public:
             return false;
         }
 
-        texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA8888, SDL_TEXTUREACCESS_STREAMING, GRID_WIDTH, GRID_HEIGHT);
+        texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA8888, SDL_TEXTUREACCESS_STREAMING, gridWidth, gridHeight);
         if (!texture) {
             std::cout << "Error al crear textura: " << SDL_GetError() << std::endl;
             return false;
@@ -71,38 +90,39 @@ public:
     }
 
     void calculateFPS() {
-        frameCount++;
-        auto currentTime = std::chrono::high_resolution_clock::now();
-        float duration = std::chrono::duration<float, std::chrono::seconds::period>(currentTime - lastTime).count();
+        #pragma omp single  // Solo un hilo realiza esta operación
+        {
+            frameCount++;
+            auto currentTime = std::chrono::high_resolution_clock::now();
+            float duration = std::chrono::duration<float, std::chrono::seconds::period>(currentTime - lastTime).count();
 
-        if (duration > 1.0f) {
-            fps = frameCount / duration;
-            frameCount = 0;
-            lastTime = currentTime;
-            updateWindowTitle();
+            if (duration > 1.0f) {
+                fps = frameCount / duration;
+                frameCount = 0;
+                lastTime = currentTime;
+                updateWindowTitle();
+            }
         }
     }
 
     void placePattern(int x, int y, const std::vector<std::vector<int>>& pattern, Uint32 color) {
         int patternHeight = pattern.size();
-        int patternWidth = pattern[0].size(); // Asumiendo que todos los patrones tienen al menos una fila y columnas consistentes
+        int patternWidth = pattern[0].size(); 
 
-        #pragma omp parallel for num_threads(6) collapse(2)
+        #pragma omp parallel for num_threads(numThreads) collapse(2)
         for (int i = 0; i < patternHeight; ++i) {
             for (int j = 0; j < patternWidth; ++j) {
                 if (pattern[i][j] == 1) {
-                    int posX = (x + j) % GRID_WIDTH;
-                    int posY = (y + i) % GRID_HEIGHT;
+                    int posX = (x + j) % gridWidth;
+                    int posY = (y + i) % gridHeight;
                     grid[posY][posX] = true;
-                    colorGrid[posY][posX] = color; // Asignar el color correspondiente
+                    colorGrid[posY][posX] = color; 
                 }
             }
         }
     }
 
-
     Uint32 generateColorFromIndex(int index) {
-        // Genera un color "pseudoaleatorio" basado en el índice
         Uint8 r = (index * 123 + 45) % 256;
         Uint8 g = (index * 67 + 89) % 256;
         Uint8 b = (index * 89 + 123) % 256;
@@ -131,14 +151,16 @@ public:
 
         auto start = std::chrono::high_resolution_clock::now(); // Iniciar medición de tiempo
 
-        #pragma omp parallel for num_threads(6)
+        #pragma omp parallel for num_threads(numThreads)
         for (int i = 0; i < numObjects; ++i) {
             int patternIndex = rand() % patterns.size();
-            int x = rand() % GRID_WIDTH;
-            int y = rand() % GRID_HEIGHT;
-            Uint32 color = generateColorFromIndex(patternIndex); // Generar color pseudoaleatorio basado en el índice
-            placePattern(x, y, patterns[patternIndex], color); // Asignar color según el patrón
+            int x = rand() % gridWidth;
+            int y = rand() % gridHeight;
+            Uint32 color = generateColorFromIndex(patternIndex); 
+            placePattern(x, y, patterns[patternIndex], color); 
         }
+
+        #pragma omp barrier
 
         auto end = std::chrono::high_resolution_clock::now(); // Fin de medición de tiempo
         std::chrono::duration<double> duration = end - start;
@@ -150,8 +172,8 @@ public:
         for (int dy = -1; dy <= 1; ++dy) {
             for (int dx = -1; dx <= 1; ++dx) {
                 if (dx == 0 && dy == 0) continue;
-                int nx = (x + dx + GRID_WIDTH) % GRID_WIDTH;
-                int ny = (y + dy + GRID_HEIGHT) % GRID_HEIGHT;
+                int nx = (x + dx + gridWidth) % gridWidth;
+                int ny = (y + dy + gridHeight) % gridHeight;
                 count += grid[ny][nx];
             }
         }
@@ -159,9 +181,9 @@ public:
     }
 
     void update() {
-        #pragma omp parallel for collapse(2) num_threads(6)
-        for (int y = 0; y < GRID_HEIGHT; ++y) {
-            for (int x = 0; x < GRID_WIDTH; ++x) {
+        #pragma omp parallel for collapse(2) num_threads(numThreads)
+        for (int y = 0; y < gridHeight; ++y) {
+            for (int x = 0; x < gridWidth; ++x) {
                 int neighbors = countNeighbors(x, y);
                 nextGrid[y][x] = (grid[y][x] && (neighbors == 2 || neighbors == 3)) || (!grid[y][x] && neighbors == 3);
             }
@@ -175,10 +197,10 @@ public:
         SDL_LockTexture(texture, nullptr, &pixels, &pitch);
         Uint32* pixelData = static_cast<Uint32*>(pixels);
 
-        #pragma omp parallel for collapse(2) num_threads(6)
-        for (int y = 0; y < GRID_HEIGHT; ++y) {
-            for (int x = 0; x < GRID_WIDTH; ++x) {
-                pixelData[y * GRID_WIDTH + x] = grid[y][x] ? colorGrid[y][x] : 0x000000FF; // Usar color asignado o negro
+        #pragma omp parallel for collapse(2) num_threads(numThreads)
+        for (int y = 0; y < gridHeight; ++y) {
+            for (int x = 0; x < gridWidth; ++x) {
+                pixelData[y * gridWidth + x] = grid[y][x] ? colorGrid[y][x] : 0x000000FF; 
             }
         }
 
@@ -189,7 +211,7 @@ public:
     }
 
     void run() {
-        generateFigures(); // Generar figuras predefinidas
+        generateFigures(); 
 
         bool quit = false;
         SDL_Event e;
@@ -209,7 +231,7 @@ public:
 
             auto frameEnd = std::chrono::high_resolution_clock::now();
             std::chrono::duration<double, std::milli> frameDuration = frameEnd - frameStart;
-            int delay = FRAME_DELAY - static_cast<int>(frameDuration.count());
+            int delay = (1000 / 60) - static_cast<int>(frameDuration.count());
             if (delay > 0) {
                 SDL_Delay(delay);
             }
@@ -217,27 +239,41 @@ public:
     }
 
     void close() {
-        SDL_DestroyTexture(texture);
-        SDL_DestroyRenderer(renderer);
-        SDL_DestroyWindow(window);
+        if (texture) {
+            SDL_DestroyTexture(texture);
+            texture = nullptr;
+        }
+        if (renderer) {
+            SDL_DestroyRenderer(renderer);
+            renderer = nullptr;
+        }
+        if (window) {
+            SDL_DestroyWindow(window);
+            window = nullptr;
+        }
         SDL_Quit();
     }
 };
 
 int main(int argc, char* args[]) {
-    if (argc != 2) {
-        std::cout << "Uso: " << args[0] << " <número de objetos>" << std::endl;
+    if (argc != 5) {
+        std::cout << "Uso: " << args[0] << " <número de objetos> <ancho> <alto> <número de hilos>" << std::endl;
         return 1;
     }
 
     int numObjects = std::atoi(args[1]);
-    if (numObjects <= 0 || numObjects > GRID_WIDTH * GRID_HEIGHT) {
-        std::cout << "El número de objetos debe ser positivo y no mayor que " << GRID_WIDTH * GRID_HEIGHT << std::endl;
+    int screenWidth = std::atoi(args[2]);
+    int screenHeight = std::atoi(args[3]);
+    int numThreads = std::atoi(args[4]);
+
+    if (numObjects <= 0 || screenWidth <= 0 || screenHeight <= 0 || numThreads <= 0) {
+        std::cout << "Todos los parámetros deben ser positivos y mayores que cero." << std::endl;
         return 1;
     }
 
-    Game game(numObjects);
+    Game game(numObjects, screenWidth, screenHeight, numThreads);
     if (!game.init()) {
+        game.close();
         return 1;
     }
     game.run();
