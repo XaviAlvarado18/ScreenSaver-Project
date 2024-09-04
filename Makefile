@@ -1,7 +1,7 @@
 # Variables
 CXX = g++
-CXXFLAGS = -std=c++17 -Wall -O2 -fopenmp
-LDFLAGS = `sdl2-config --cflags --libs` -lSDL2_ttf -pthread -fopenmp
+CXXFLAGS = -std=c++17 -Wall -O2
+LDFLAGS = `sdl2-config --cflags --libs` -lSDL2_ttf -pthread
 
 # Objetivo por defecto
 all: ScreenSaverSeq ScreenSaverParallel ScreenSaverParallel2 ScreenSaverParallelNotC ScreenSaverThreaded
