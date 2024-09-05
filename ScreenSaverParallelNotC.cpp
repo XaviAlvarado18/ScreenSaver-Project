@@ -105,6 +105,8 @@ public:
         srand(time(nullptr));
         int objectsPlaced = 0;  // Contador para rastrear el número de células activadas
 
+        auto start = std::chrono::high_resolution_clock::now(); // Iniciar medición de tiempo
+
         #pragma omp parallel num_threads(numThreads)
         {
             #pragma omp for collapse(2) schedule(static) reduction(+:objectsPlaced)
@@ -126,6 +128,11 @@ public:
             }
             #pragma omp barrier  // Asegura que todos los hilos han terminado antes de pasar a la siguiente parte
         }
+
+        auto end = std::chrono::high_resolution_clock::now(); // Fin de medición de tiempo
+        std::chrono::duration<double> duration = end - start;
+        std::cout << "Tiempo para generar figuras: " << duration.count() << " segundos" << std::endl;
+
     }
 
     int countNeighbors(int x, int y) {
