@@ -33,7 +33,7 @@ make
 
 ## Ejecución
 
-La ejecucion toma tres parametros:
+La ejecucion del programa secuencial toma tres parametros:
 
 - Cantidad de celulas a renderizar (Numero entero mayor a 0 y menor al Ancho x Alto de la pantalla).
 - Ancho de la pantalla en pixeles (Debe ser un numero entero positivo).
@@ -43,22 +43,35 @@ La ejecucion toma tres parametros:
 ./ScreenSaverSeq <numero_de_celulas_a_renderizar> <Screen_Width> <Screen_Height>
 ```
 
+Ejemplo:
+
 ```bash
-./ScreenSaverParallel <numero_de_celulas_a_renderizar> <Screen_Width> <Screen_Height>
+./ScreenSaverSeq 1000 1080 720
+```
+
+La ejecucion de los programas paralelos toma cuatro parametros:
+
+- Cantidad de celulas a renderizar (Numero entero mayor a 0 y menor al Ancho x Alto de la pantalla).
+- Ancho de la pantalla en pixeles (Debe ser un numero entero positivo).
+- Alto de la pantalla en pixeles (Debe ser un numero entero positivo).
+- Numero de Threads a utilizar (Debe ser un numero entero positivo).
+
+```bash
+./ScreenSaverParallel <numero_de_celulas_a_renderizar> <Screen_Width> <Screen_Height> <No_Threads>
 ```
 
 ```bash
-./ScreenSaverParallel2 <numero_de_celulas_a_renderizar> <Screen_Width> <Screen_Height>
+./ScreenSaverParallel2 <numero_de_celulas_a_renderizar> <Screen_Width> <Screen_Height> <No_Threads>
 ```
 
 ```bash
-./ScreenSaverParallelNotC <numero_de_celulas_a_renderizar> <Screen_Width> <Screen_Height>
+./ScreenSaverParallelNotC <numero_de_celulas_a_renderizar> <Screen_Width> <Screen_Height> <No_Threads>
 ```
 
 Ejemplo:
 
 ```bash
-./ScreenSaverSeq 1000 1080 720
+./ScreenSaverParallel2 2500 1080 720 6
 ```
 
 ## Uso de OpenMP
